@@ -11,7 +11,6 @@ namespace ToDoSkill.Services
     using System.Threading.Tasks;
     using System.Xml;
     using Microsoft.Extensions.Configuration;
-    using Microsoft.Extensions.Configuration.Binder;
     using Microsoft.Graph;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
