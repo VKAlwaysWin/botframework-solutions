@@ -19,6 +19,14 @@ namespace ToDoSkillTest.API
         }
 
         [TestMethod]
+        public void LoadCustomizedListTypesFromSettingsTests()
+        {
+            var service = new OneNoteService(MockConfiguration.Configuration);
+            var listType = service.GetListTypes();
+            Assert.IsTrue(listType.Count == 4 && listType.Contains(MockData.Homework));
+        }
+
+        [TestMethod]
         public async Task AddTaskTests()
         {
             var service = new OneNoteService();

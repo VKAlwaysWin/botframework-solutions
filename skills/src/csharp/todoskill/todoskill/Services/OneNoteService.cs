@@ -7,8 +7,11 @@ namespace ToDoSkill.Services
     using System.Collections.Generic;
     using System.Linq;
     using System.Net.Http;
+    using System.Reflection;
     using System.Threading.Tasks;
     using System.Xml;
+    using Microsoft.Extensions.Configuration;
+    using Microsoft.Extensions.Configuration.Binder;
     using Microsoft.Graph;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
@@ -23,6 +26,17 @@ namespace ToDoSkill.Services
         private readonly string graphBaseUrl = "https://graph.microsoft.com/v1.0/me";
         private HttpClient httpClient;
         private Dictionary<string, string> pageIds;
+
+        public OneNoteService()
+        {
+        }
+
+        public OneNoteService(IConfiguration configuration)
+        {
+            this.Configuration = configuration;
+        }
+
+        public IConfiguration Configuration { get; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the task page is created or not.
@@ -55,32 +69,30 @@ namespace ToDoSkill.Services
                     httpClient = client;
                 }
 
-                if (!pageIds.ContainsKey(ToDoStrings.ToDo)
-                    || !pageIds.ContainsKey(ToDoStrings.Grocery)
-                    || !pageIds.ContainsKey(ToDoStrings.Shopping))
+                List<string> customizedListTypes = GetListTypes();
+                string notebookId = null;
+                string sectionId = null;
+                var toDoStringProperties = typeof(ToDoStrings).GetProperties();
+                foreach (var customizedListType in customizedListTypes)
                 {
-                    var notebookId = await GetOrCreateNotebookAsync(ToDoStrings.OneNoteBookName);
-                    var sectionId = await GetOrCreateSectionAsync(notebookId, ToDoStrings.OneNoteSectionName);
-
-                    if (!pageIds.ContainsKey(ToDoStrings.ToDo))
+                    foreach (PropertyInfo toDoStringProperty in toDoStringProperties)
                     {
-                        var toDoPageId = await GetOrCreatePageAsync(sectionId, ToDoStrings.ToDo);
-                        pageIds.Add(ToDoStrings.ToDo, toDoPageId.Item1);
-                        IsListCreated = IsListCreated && toDoPageId.Item2;
-                    }
+                        if (customizedListType == toDoStringProperty.Name)
+                        {
+                            string pageTitle = toDoStringProperty.GetValue(null).ToString();
+                            if (!pageIds.ContainsKey(pageTitle))
+                            {
+                                if (notebookId == null || sectionId == null)
+                                {
+                                    notebookId = await GetOrCreateNotebookAsync(ToDoStrings.OneNoteBookName);
+                                    sectionId = await GetOrCreateSectionAsync(notebookId, ToDoStrings.OneNoteSectionName);
+                                }
 
-                    if (!pageIds.ContainsKey(ToDoStrings.Grocery))
-                    {
-                        var groceryPageId = await GetOrCreatePageAsync(sectionId, ToDoStrings.Grocery);
-                        pageIds.Add(ToDoStrings.Grocery, groceryPageId.Item1);
-                        IsListCreated = IsListCreated && groceryPageId.Item2;
-                    }
-
-                    if (!pageIds.ContainsKey(ToDoStrings.Shopping))
-                    {
-                        var shoppingPageId = await GetOrCreatePageAsync(sectionId, ToDoStrings.Shopping);
-                        pageIds.Add(ToDoStrings.Shopping, shoppingPageId.Item1);
-                        IsListCreated = IsListCreated && shoppingPageId.Item2;
+                                var pageId = await GetOrCreatePageAsync(sectionId, pageTitle);
+                                pageIds.Add(pageTitle, pageId.Item1);
+                                IsListCreated = IsListCreated && pageId.Item2;
+                            }
+                        }
                     }
                 }
 
@@ -91,6 +103,25 @@ namespace ToDoSkill.Services
             {
                 throw ServiceHelper.HandleGraphAPIException(ex);
             }
+        }
+
+        /// <summary>
+        /// Get list types.
+        /// </summary>
+        /// <returns>List of types.</returns>
+        public List<string> GetListTypes()
+        {
+            List<string> customizedListTypes = new List<string>();
+            if (this.Configuration != null)
+            {
+                customizedListTypes = this.Configuration.GetSection("customizeListTypes").Get<List<string>>();
+            }
+
+            // Add three default types we provided.
+            customizedListTypes.Add("ToDo");
+            customizedListTypes.Add("Grocery");
+            customizedListTypes.Add("Shopping");
+            return customizedListTypes;
         }
 
         /// <summary>
